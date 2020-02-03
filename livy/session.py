@@ -117,6 +117,8 @@ class LivySession:
         to ``True``.
     :param check: Whether to raise an exception when a statement in the remote
         session fails. Defaults to ``True``.
+    :param resumeSessionID: A session ID to resume to, instead of creating a new 
+        session. Will create a new session if the session does not exist (anymore)
     """
 
     def __init__(
@@ -140,6 +142,7 @@ class LivySession:
         spark_conf: Dict[str, Any] = None,
         echo: bool = True,
         check: bool = True,
+        resumeId: int = None
     ) -> None:
         self.client = LivyClient(url, auth, verify=verify)
         self.kind = kind
@@ -158,6 +161,7 @@ class LivySession:
         self.spark_conf = spark_conf
         self.echo = echo
         self.check = check
+        self.resumeSessionID = resumeId
         self.session_id: Optional[int] = None
 
     def __enter__(self) -> "LivySession":
@@ -169,23 +173,32 @@ class LivySession:
 
     def start(self) -> None:
         """Create the remote Spark session and wait for it to be ready."""
-
-        session = self.client.create_session(
-            self.kind,
-            self.proxy_user,
-            self.jars,
-            self.py_files,
-            self.files,
-            self.driver_memory,
-            self.driver_cores,
-            self.executor_memory,
-            self.executor_cores,
-            self.num_executors,
-            self.archives,
-            self.queue,
-            self.name,
-            self.spark_conf,
-        )
+        session = None
+        if self.resumeSessionID is not None:
+            session = self.client.get_session(self.resumeSessionID)
+            if session is None:
+                print("Resuming session #%s failed: Session does not exist. Creating a new session." % self.resumeSessionID)
+            if session is not None and session.state in [SessionState.DEAD, SessionState.KILLED, SessionState.ERROR]:
+                print("Resuming session #%s failed: %s. Creating a new session." % (self.resumeSessionID, session.state))
+                session = None
+        
+        if session is None:
+            session = self.client.create_session(
+                self.kind,
+                self.proxy_user,
+                self.jars,
+                self.py_files,
+                self.files,
+                self.driver_memory,
+                self.driver_cores,
+                self.executor_memory,
+                self.executor_cores,
+                self.num_executors,
+                self.archives,
+                self.queue,
+                self.name,
+                self.spark_conf,
+            )
         self.session_id = session.session_id
 
         not_ready = {SessionState.NOT_STARTED, SessionState.STARTING}

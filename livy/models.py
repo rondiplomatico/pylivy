@@ -141,6 +141,7 @@ class SessionState(Enum):
     SHUTTING_DOWN = "shutting_down"
     ERROR = "error"
     DEAD = "dead"
+    KILLED = "killed"
     SUCCESS = "success"
 
 
